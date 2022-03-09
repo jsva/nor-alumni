@@ -1,0 +1,33 @@
+
+variables:
+  DOCKER_TLS_CERTDIR: "/certs/client"
+  CONTAINER_TEST_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  CONTAINER_RELEASE_IMAGE: $CI_REGISTRY_IMAGE:latest
+  DEPLOYMENT_AUTH_HEADER: "Authorization: Basic ${DEPLOYMENT_AUTH}"
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  image: docker:19.03.1
+  services:
+    - docker:19.03.1-dind
+  tags:
+    - dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CONTAINER_TEST_IMAGE .
+    - docker tag $CONTAINER_TEST_IMAGE $CONTAINER_RELEASE_IMAGE
+    - docker push $CI_REGISTRY_IMAGE
+
+trigger_azure:
+  stage: deploy
+  image: curlimages/curl:latest
+  when: manual
+  script:
+    # Don't forget to escape special characters (i.e. '\$') in your ENV variable
+    # See https://stackoverflow.com/questions/46766903/how-to-trigger-manually-container-refresh/46769983#46769983
+    - curl --fail -X POST -d "" -H "$DEPLOYMENT_AUTH_HEADER" $DEPLOYMENT_WEBHOOK
+    # This will produce a non-zero exit code if the request fails
